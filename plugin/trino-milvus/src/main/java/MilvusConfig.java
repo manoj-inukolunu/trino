@@ -1,22 +1,47 @@
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+import com.fasterxml.jackson.annotation.JsonProperty;
 import io.airlift.configuration.Config;
-import java.net.URI;
+
 import javax.validation.constraints.NotNull;
 
-public class MilvusConfig
-{
-    private URI metadata;
+public class MilvusConfig {
+  private String host;
 
-    @NotNull
-    public URI getMetadata()
-    {
-        return metadata;
-    }
+  private String port;
 
-    @Config("metadata-uri")
-    public MilvusConfig setMetadata(URI metadata)
-    {
-        this.metadata = metadata;
-        return this;
-    }
+  @NotNull
+  @JsonProperty
+  public String getPort() {
+    return port;
+  }
+
+  @NotNull
+  @JsonProperty
+  public String getHost() {
+    return host;
+  }
+
+  @Config("host")
+  public MilvusConfig setHost(String host) {
+    this.host = host;
+    return this;
+  }
+
+  @Config("port")
+  public MilvusConfig setPort(String port) {
+    this.port = port;
+    return this;
+  }
 }
-

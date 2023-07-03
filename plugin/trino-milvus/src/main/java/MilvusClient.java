@@ -1,103 +1,145 @@
-
-import static com.google.common.collect.Iterables.transform;
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 import static com.google.common.collect.Maps.transformValues;
 import static com.google.common.collect.Maps.uniqueIndex;
-import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Objects.requireNonNull;
 
-import com.google.common.base.Function;
-import com.google.common.base.Supplier;
-import com.google.common.base.Suppliers;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
-import com.google.common.io.Resources;
 import com.google.inject.Inject;
 import io.airlift.json.JsonCodec;
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.net.URI;
-import java.net.URL;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import io.milvus.client.MilvusMultiServiceClient;
+import io.milvus.client.MilvusServiceClient;
+import io.milvus.grpc.DataType;
+import io.milvus.grpc.DescribeCollectionResponse;
+import io.milvus.grpc.FieldSchema;
+import io.milvus.grpc.SearchResults;
+import io.milvus.param.ConnectParam;
+import io.milvus.param.MetricType;
+import io.milvus.param.collection.DescribeCollectionParam;
+import io.milvus.param.collection.LoadCollectionParam;
+import io.milvus.param.collection.ShowCollectionsParam;
+import io.milvus.param.dml.SearchParam;
+import io.milvus.response.SearchResultsWrapper;
+import io.trino.spi.type.*;
 
-public class MilvusClient
-{
-    /**
-     * SchemaName -> (TableName -> TableMetadata)
-     */
-    private final Supplier<Map<String, Map<String, MilvusTable>>> schemas;
+import java.util.*;
 
-    @Inject
-    public MilvusClient(MilvusConfig config, JsonCodec<Map<String, List<MilvusTable>>> catalogCodec)
-    {
-        requireNonNull(catalogCodec, "catalogCodec is null");
-        schemas = Suppliers.memoize(schemasSupplier(catalogCodec, config.getMetadata()));
+public class MilvusClient {
+
+  private final MilvusServiceClient milvusServiceClient;
+
+  private final Map<String, MilvusServiceClient> dbToMilvusClient = new HashMap<>();
+
+  private final MilvusConfig config;
+
+  Map<DataType, Type> typeMap =
+      ImmutableMap.ofEntries(
+          Map.entry(DataType.Int64, BigintType.BIGINT),
+          Map.entry(DataType.Int32, IntegerType.INTEGER),
+          Map.entry(DataType.String, VarcharType.VARCHAR),
+          Map.entry(DataType.VarChar, VarcharType.VARCHAR),
+          Map.entry(DataType.FloatVector, VarcharType.VARCHAR));
+
+  @Inject
+  public MilvusClient(MilvusConfig config, JsonCodec<Map<String, List<MilvusTable>>> catalogCodec) {
+    requireNonNull(catalogCodec, "catalogCodec is null");
+    this.milvusServiceClient =
+        new MilvusServiceClient(
+            ConnectParam.newBuilder()
+                .withHost(config.getHost())
+                .withPort(Integer.parseInt(config.getPort()))
+                .build());
+    dbToMilvusClient.put("default", milvusServiceClient);
+    this.config = config;
+  }
+
+  public Set<String> getSchemaNames() {
+    return new HashSet<>(milvusServiceClient.listDatabases().getData().getDbNamesList());
+  }
+
+  public Set<String> getTableNames(String schema) {
+    requireNonNull(schema, "schema is null");
+    return new HashSet<>(
+        milvusServiceClient
+            .showCollections(ShowCollectionsParam.newBuilder().withDatabaseName(schema).build())
+            .getData()
+            .getCollectionNamesList());
+  }
+
+  public MilvusTable getTable(String schema, String collectionName) {
+
+    requireNonNull(schema, "schema is null");
+    requireNonNull(collectionName, "collectionName is null");
+    DescribeCollectionResponse response =
+        milvusServiceClient
+            .describeCollection(
+                DescribeCollectionParam.newBuilder()
+                    .withDatabaseName(schema)
+                    .withCollectionName(collectionName)
+                    .build())
+            .getData();
+    String tableName = response.getCollectionName();
+    List<MilvusColumn> milvusColumns = new ArrayList<>();
+    for (FieldSchema fieldSchema : response.getSchema().getFieldsList()) {
+      String fieldName = fieldSchema.getName();
+      Type fieldType = typeMap.get(fieldSchema.getDataType());
+      if (fieldSchema.getDataType().equals(DataType.FloatVector)) {
+        milvusColumns.add(new MilvusColumn(fieldName, fieldType, "Vector Type"));
+      } else {
+        milvusColumns.add(new MilvusColumn(fieldName, fieldType, ""));
+      }
     }
+    return new MilvusTable(tableName, milvusColumns);
+  }
 
-    public Set<String> getSchemaNames()
-    {
-        return schemas.get().keySet();
+  public void loadCollection(String databaseName, String collectionName) {
+
+    milvusServiceClient.loadCollection(
+        LoadCollectionParam.newBuilder()
+            .withCollectionName(collectionName)
+            .withDatabaseName(databaseName)
+            .build());
+  }
+
+  public SearchResultsWrapper getRecords(
+      String databaseName, String collectionName, List<String> columns) {
+    MilvusServiceClient serviceClient = dbToMilvusClient.get(databaseName);
+    if (serviceClient == null) {
+      serviceClient =
+          new MilvusServiceClient(
+              ConnectParam.newBuilder()
+                  .withHost(config.getHost())
+                  .withDatabaseName(databaseName)
+                  .withPort(Integer.parseInt(config.getPort()))
+                  .build());
+      dbToMilvusClient.put(databaseName, serviceClient);
     }
+    String SEARCH_PARAM = "{\"nprobe\":10}";
+    List<List<Float>> searchVectors = Arrays.asList(Arrays.asList(0.1f, 0.2f));
+    SearchParam searchParam =
+        SearchParam.newBuilder()
+            .withCollectionName(collectionName)
+            .withOutFields(columns)
+            .withVectors(searchVectors)
+            .withParams(SEARCH_PARAM)
+            .withTopK(16384)
+            .withVectorFieldName("book_intro")
+            .withMetricType(MetricType.L2)
+            .build();
 
-    public Set<String> getTableNames(String schema)
-    {
-        requireNonNull(schema, "schema is null");
-        Map<String, MilvusTable> tables = schemas.get().get(schema);
-        if (tables == null) {
-            return ImmutableSet.of();
-        }
-        return tables.keySet();
-    }
-
-    public MilvusTable getTable(String schema, String tableName)
-    {
-        requireNonNull(schema, "schema is null");
-        requireNonNull(tableName, "tableName is null");
-        Map<String, MilvusTable> tables = schemas.get().get(schema);
-        if (tables == null) {
-            return null;
-        }
-        return tables.get(tableName);
-    }
-
-    private static Supplier<Map<String, Map<String, MilvusTable>>> schemasSupplier(JsonCodec<Map<String, List<MilvusTable>>> catalogCodec, URI metadataUri)
-    {
-        return () -> {
-            try {
-                return lookupSchemas(metadataUri, catalogCodec);
-            }
-            catch (IOException e) {
-                throw new UncheckedIOException(e);
-            }
-        };
-    }
-
-    private static Map<String, Map<String, MilvusTable>> lookupSchemas(URI metadataUri, JsonCodec<Map<String, List<MilvusTable>>> catalogCodec)
-            throws IOException
-    {
-        URL result = metadataUri.toURL();
-        String json = Resources.toString(result, UTF_8);
-        Map<String, List<MilvusTable>> catalog = catalogCodec.fromJson(json);
-
-        return ImmutableMap.copyOf(transformValues(catalog, resolveAndIndexTables(metadataUri)));
-    }
-
-    private static Function<List<MilvusTable>, Map<String, MilvusTable>> resolveAndIndexTables(URI metadataUri)
-    {
-        return tables -> {
-            Iterable<MilvusTable> resolvedTables = transform(tables, tableUriResolver(metadataUri));
-            return ImmutableMap.copyOf(uniqueIndex(resolvedTables, MilvusTable::getName));
-        };
-    }
-
-    private static Function<MilvusTable, MilvusTable> tableUriResolver(URI baseUri)
-    {
-        return table -> {
-            List<URI> sources = ImmutableList.copyOf(transform(table.getSources(), baseUri::resolve));
-            return new MilvusTable(table.getName(), table.getColumns(), sources);
-        };
-    }
+    SearchResults results = serviceClient.search(searchParam).getData();
+    SearchResultsWrapper wrapper = new SearchResultsWrapper(results.getResults());
+    return wrapper;
+  }
 }
-
