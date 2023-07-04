@@ -21,6 +21,7 @@ import com.google.common.collect.ImmutableList;
 import io.trino.spi.connector.ColumnMetadata;
 import java.net.URI;
 import java.util.List;
+import java.util.Optional;
 
 public class MilvusTable {
   private final String name;
@@ -36,7 +37,13 @@ public class MilvusTable {
 
     ImmutableList.Builder<ColumnMetadata> columnsMetadata = ImmutableList.builder();
     for (MilvusColumn column : this.columns) {
-      columnsMetadata.add(new ColumnMetadata(column.getName(), column.getType()));
+
+      columnsMetadata.add(
+          ColumnMetadata.builder()
+              .setName(column.getName())
+              .setType(column.getType())
+              .setExtraInfo(Optional.of(column.getExtraInfo()))
+              .build());
     }
     this.columnsMetadata = columnsMetadata.build();
   }

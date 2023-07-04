@@ -13,28 +13,40 @@
  */
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.ConnectorTableHandle;
 import io.trino.spi.connector.SchemaTableName;
+import io.trino.spi.predicate.TupleDomain;
 
 import java.util.Objects;
 
+import static com.google.common.base.MoreObjects.toStringHelper;
 import static java.util.Objects.requireNonNull;
 
 public class MilvusTableHandle implements ConnectorTableHandle {
 
   private final String schemaName;
   private final String tableName;
+  private final TupleDomain<ColumnHandle> constraint;
 
   @JsonCreator
   public MilvusTableHandle(
-      @JsonProperty("schemaName") String schemaName, @JsonProperty("tableName") String tableName) {
+      @JsonProperty("schemaName") String schemaName,
+      @JsonProperty("tableName") String tableName,
+      @JsonProperty("constraint") TupleDomain<ColumnHandle> constraint) {
     this.schemaName = requireNonNull(schemaName, "schemaName is null");
     this.tableName = requireNonNull(tableName, "tableName is null");
+    this.constraint = constraint;
   }
 
   @JsonProperty
   public String getSchemaName() {
     return schemaName;
+  }
+
+  @JsonProperty
+  public TupleDomain<ColumnHandle> getConstraint() {
+    return constraint;
   }
 
   @JsonProperty
@@ -48,7 +60,7 @@ public class MilvusTableHandle implements ConnectorTableHandle {
 
   @Override
   public int hashCode() {
-    return Objects.hash(schemaName, tableName);
+    return Objects.hash(schemaName, tableName, constraint);
   }
 
   @Override
@@ -62,11 +74,16 @@ public class MilvusTableHandle implements ConnectorTableHandle {
 
     MilvusTableHandle other = (MilvusTableHandle) obj;
     return Objects.equals(this.schemaName, other.schemaName)
-        && Objects.equals(this.tableName, other.tableName);
+        && Objects.equals(this.tableName, other.tableName)
+        && Objects.equals(this.constraint, other.constraint);
   }
 
   @Override
   public String toString() {
-    return schemaName + ":" + tableName;
+    return toStringHelper(this)
+        .add("schemaName", schemaName)
+        .add("tableName", tableName)
+        .add("constraint", constraint)
+        .toString();
   }
 }

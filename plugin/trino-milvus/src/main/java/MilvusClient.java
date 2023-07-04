@@ -16,9 +16,9 @@ import static com.google.common.collect.Maps.uniqueIndex;
 import static java.util.Objects.requireNonNull;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Lists;
 import com.google.inject.Inject;
 import io.airlift.json.JsonCodec;
-import io.milvus.client.MilvusMultiServiceClient;
 import io.milvus.client.MilvusServiceClient;
 import io.milvus.grpc.DataType;
 import io.milvus.grpc.DescribeCollectionResponse;
@@ -113,7 +113,7 @@ public class MilvusClient {
   }
 
   public SearchResultsWrapper getRecords(
-      String databaseName, String collectionName, List<String> columns) {
+      String databaseName, String collectionName, String similarTo, List<String> columns) {
     MilvusServiceClient serviceClient = dbToMilvusClient.get(databaseName);
     if (serviceClient == null) {
       serviceClient =
@@ -123,10 +123,11 @@ public class MilvusClient {
                   .withDatabaseName(databaseName)
                   .withPort(Integer.parseInt(config.getPort()))
                   .build());
-      dbToMilvusClient.put(databaseName, serviceClient);
+        dbToMilvusClient.put(databaseName, serviceClient);
     }
-    String SEARCH_PARAM = "{\"nprobe\":10}";
-    List<List<Float>> searchVectors = Arrays.asList(Arrays.asList(0.1f, 0.2f));
+      String SEARCH_PARAM = "{\"nprobe\":10}";
+    List<List<Float>> searchVectors =
+        OpenAiClient.generateEmbeddings(Lists.newArrayList(similarTo));
     SearchParam searchParam =
         SearchParam.newBuilder()
             .withCollectionName(collectionName)
@@ -134,7 +135,7 @@ public class MilvusClient {
             .withVectors(searchVectors)
             .withParams(SEARCH_PARAM)
             .withTopK(16384)
-            .withVectorFieldName("book_intro")
+            .withVectorFieldName("product_review_vector")
             .withMetricType(MetricType.L2)
             .build();
 

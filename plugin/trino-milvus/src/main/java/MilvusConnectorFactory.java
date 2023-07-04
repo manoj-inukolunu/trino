@@ -29,7 +29,7 @@ public class MilvusConnectorFactory implements ConnectorFactory {
 //    private static final Logger log = Logger.get(MilvusConnectorFactory.class);
     @Override
     public String getName() {
-        return "milvus_connector";
+        return "milvus";
     }
 
     @Override

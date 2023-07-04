@@ -15,6 +15,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.inject.Inject;
 import io.trino.spi.connector.*;
+import io.trino.spi.predicate.TupleDomain;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -57,7 +58,8 @@ public class MilvusConnectorMetadata implements ConnectorMetadata {
 
   @Override
   public ConnectorTableHandle getTableHandle(ConnectorSession session, SchemaTableName tableName) {
-    return new MilvusTableHandle(tableName.getSchemaName(), tableName.getTableName());
+    return new MilvusTableHandle(
+        tableName.getSchemaName(), tableName.getTableName(), TupleDomain.all());
   }
 
   @Override
@@ -119,11 +121,39 @@ public class MilvusConnectorMetadata implements ConnectorMetadata {
   }
 
   @Override
+  public Optional<TopNApplicationResult<ConnectorTableHandle>> applyTopN(
+      ConnectorSession session,
+      ConnectorTableHandle handle,
+      long topNCount,
+      List<SortItem> sortItems,
+      Map<String, ColumnHandle> assignments) {
+    return ConnectorMetadata.super.applyTopN(session, handle, topNCount, sortItems, assignments);
+  }
+
+  @Override
   public Optional<ConstraintApplicationResult<ConnectorTableHandle>> applyFilter(
       ConnectorSession session, ConnectorTableHandle handle, Constraint constraint) {
 
-      constraint.getSummary()
+    MilvusTableHandle tableHandle = (MilvusTableHandle) handle;
+    TupleDomain<ColumnHandle> oldDomain = tableHandle.getConstraint();
 
-    return ConnectorMetadata.super.applyFilter(session, handle, constraint);
+    TupleDomain<ColumnHandle> newDomain = oldDomain.intersect(constraint.getSummary());
+
+    if (newDomain.isNone()) {
+      return Optional.empty();
+    }
+
+    if (oldDomain.equals(newDomain)) {
+      return Optional.empty();
+    }
+
+    handle =
+        new MilvusTableHandle(tableHandle.getSchemaName(), tableHandle.getTableName(), newDomain);
+
+    //setting remainingFilter to TupleDomain.all() because milvus is doing the actual filtering.
+
+    return Optional.of(
+        new ConstraintApplicationResult<>(
+            handle, TupleDomain.all(), false));
   }
 }

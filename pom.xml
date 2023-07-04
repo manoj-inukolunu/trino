@@ -2039,14 +2039,14 @@
                     </configuration>
                 </plugin>
 
-                <plugin>
+                <!--<plugin>
                     <groupId>com.github.ekryd.sortpom</groupId>
                     <artifactId>sortpom-maven-plugin</artifactId>
                     <version>3.2.1</version>
                     <configuration>
                         <createBackupFile>false</createBackupFile>
                         <nrOfIndentSpace>4</nrOfIndentSpace>
-                        <sortModules>true</sortModules>
+                        <sortModules>false</sortModules>
                         <sortDependencies>scope,groupId,artifactId</sortDependencies>
                         <sortDependencyExclusions>groupId,artifactId</sortDependencyExclusions>
                         <spaceBeforeCloseEmptyElement>true</spaceBeforeCloseEmptyElement>
@@ -2062,7 +2062,7 @@
                             <phase>validate</phase>
                         </execution>
                     </executions>
-                </plugin>
+                </plugin>-->
 
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
@@ -2335,10 +2335,10 @@
                 </configuration>
             </plugin>
 
-            <plugin>
+            <!--<plugin>
                 <groupId>com.github.ekryd.sortpom</groupId>
                 <artifactId>sortpom-maven-plugin</artifactId>
-            </plugin>
+            </plugin>-->
         </plugins>
     </build>
 

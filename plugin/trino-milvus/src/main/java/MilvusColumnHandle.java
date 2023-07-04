@@ -58,10 +58,16 @@ public class MilvusColumnHandle implements ColumnHandle {
     return ordinalPosition;
   }
 
+  @JsonProperty
+  public String getExtraInfo() {
+    return extraInfo;
+  }
+
   public ColumnMetadata getColumnMetadata() {
     return ColumnMetadata.builder()
         .setName(columnName)
         .setType(columnType)
+        .setExtraInfo(Optional.ofNullable(extraInfo))
         .build();
   }
 

@@ -20,6 +20,7 @@ import io.trino.spi.type.Type;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 public class MilvusRecordSet implements RecordSet {
@@ -40,9 +41,13 @@ public class MilvusRecordSet implements RecordSet {
             .map(
                 column -> {
                   MilvusColumnHandle columnHandle = (MilvusColumnHandle) column;
+                  if (columnHandle.getExtraInfo().contains("Vector")) {
+                    return null;
+                  }
                   handleMap.put(columnHandle.getColumnName(), columnHandle);
                   return columnHandle.getColumnType();
                 })
+            .filter(Objects::nonNull)
             .collect(Collectors.toList());
     this.colIdxToName = colIdxToName;
   }

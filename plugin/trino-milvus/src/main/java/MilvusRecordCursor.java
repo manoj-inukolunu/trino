@@ -17,6 +17,7 @@ import io.milvus.response.SearchResultsWrapper;
 import io.trino.spi.connector.RecordCursor;
 import io.trino.spi.type.Type;
 
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -33,7 +34,9 @@ public class MilvusRecordCursor implements RecordCursor {
       SearchResultsWrapper wrapper,
       Map<String, MilvusColumnHandle> handleMap,
       Map<Integer, String> colIdxToName) {
-    this.recordIterator = wrapper.getRowRecords().iterator();
+    List<QueryResultsWrapper.RowRecord> list = wrapper.getRowRecords();
+    list.sort(Comparator.comparingDouble(o -> (Float) o.get("distance")));
+    this.recordIterator = list.iterator();
     this.handleMap = handleMap;
     this.colIdxToName = colIdxToName;
   }
@@ -64,32 +67,32 @@ public class MilvusRecordCursor implements RecordCursor {
 
   @Override
   public boolean getBoolean(int field) {
-    return (boolean) currentRow.get(colIdxToName.get(field));
+    return (boolean) currentRow.get("product_id");
   }
 
   @Override
   public long getLong(int field) {
-    return (long) currentRow.get(colIdxToName.get(field));
+    return (long) currentRow.get("product_id");
   }
 
   @Override
   public double getDouble(int field) {
-    return (double) currentRow.get(colIdxToName.get(field));
+    return (double) currentRow.get("product_id");
   }
 
   @Override
   public Slice getSlice(int field) {
-    return utf8Slice((String) currentRow.get(colIdxToName.get(field)));
+    return utf8Slice((String) currentRow.get("product_id"));
   }
 
   @Override
   public Object getObject(int field) {
-    return currentRow.get(colIdxToName.get(field));
+    return currentRow.get("product_id");
   }
 
   @Override
   public boolean isNull(int field) {
-    return currentRow.get(colIdxToName.get(field)) == null;
+    return currentRow.get("product_id") == null;
   }
 
   @Override
