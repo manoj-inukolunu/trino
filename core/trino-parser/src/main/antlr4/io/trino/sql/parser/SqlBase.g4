@@ -195,6 +195,7 @@ with
 tableElement
     : columnDefinition
     | likeClause
+    | similarToClause
     ;
 
 columnDefinition
@@ -203,6 +204,10 @@ columnDefinition
 
 likeClause
     : LIKE qualifiedName (optionType=(INCLUDING | EXCLUDING) PROPERTIES)?
+    ;
+
+similarToClause
+    : SIMILAR_TO qualifiedName (optionType=(INCLUDING | EXCLUDING) PROPERTIES)?
     ;
 
 properties
@@ -1041,6 +1046,7 @@ LEADING: 'LEADING';
 LEFT: 'LEFT';
 LEVEL: 'LEVEL';
 LIKE: 'LIKE';
+SIMILAR_TO: 'SIMILAR_TO';
 LIMIT: 'LIMIT';
 LISTAGG: 'LISTAGG';
 LOCAL: 'LOCAL';
