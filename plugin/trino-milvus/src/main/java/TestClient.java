@@ -11,10 +11,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import com.theokanning.openai.embedding.Embedding;
-import com.theokanning.openai.embedding.EmbeddingRequest;
-import com.theokanning.openai.embedding.EmbeddingResult;
-import com.theokanning.openai.service.OpenAiService;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.airlift.json.ObjectMapperProvider;
 import io.milvus.client.MilvusServiceClient;
 import io.milvus.grpc.DataType;
 import io.milvus.param.ConnectParam;
@@ -22,9 +21,16 @@ import io.milvus.param.IndexType;
 import io.milvus.param.MetricType;
 import io.milvus.param.collection.CreateCollectionParam;
 import io.milvus.param.collection.CreateDatabaseParam;
+import io.milvus.param.collection.DropCollectionParam;
+import io.milvus.param.collection.DropDatabaseParam;
 import io.milvus.param.collection.FieldType;
 import io.milvus.param.dml.InsertParam;
 import io.milvus.param.index.CreateIndexParam;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -33,38 +39,43 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.lang.reflect.Type;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Scanner;
-import java.util.stream.Collectors;
 
-public class OpenAiClient {
+public class TestClient {
 
   private MilvusServiceClient client;
+  private static final OkHttpClient embeddingsClient = new OkHttpClient();
+  private static final ObjectMapper mapper = new ObjectMapperProvider().get();
 
-  public OpenAiClient() {
+  public TestClient() {
     client =
         new MilvusServiceClient(
             ConnectParam.newBuilder().withHost("localhost").withPort(19530).build());
   }
 
   public static List<List<Float>> generateEmbeddings(List<String> str) {
-    String openAiKey = "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";
-    OpenAiService service = new OpenAiService(openAiKey);
-    EmbeddingRequest embeddingRequest =
-        EmbeddingRequest.builder().input(str).model("text-embedding-ada-002").build();
-    EmbeddingResult result = service.createEmbeddings(embeddingRequest);
-    List<List<Double>> doubles =
-        result.getData().stream().map(Embedding::getEmbedding).collect(Collectors.toList());
-    List<List<Float>> ret = new ArrayList<>();
-    for (List<Double> l : doubles) {
-      List<Float> r1 = new ArrayList<>();
-      for (Double d : l) {
-        r1.add(d.floatValue());
-      }
-      ret.add(r1);
+    try {
+      String body = mapper.writeValueAsString(str);
+      RequestBody rBody = RequestBody.create(body.getBytes(), MediaType.parse("application/json"));
+      Request request =
+          new Request.Builder().url("http://localhost:3030/embeddings").post(rBody).build();
+
+      Response response = embeddingsClient.newCall(request).execute();
+      return mapper.readValue(
+          response.body().string(),
+          new TypeReference<List<List<Float>>>() {
+            @Override
+            public Type getType() {
+              return super.getType();
+            }
+          });
+    } catch (IOException e) {
+      throw new RuntimeException(e);
     }
-    return ret;
   }
 
   private void createDataBase(String databaseName) {
@@ -85,7 +96,7 @@ public class OpenAiClient {
         FieldType.newBuilder()
             .withName("product_review_vector")
             .withDataType(DataType.FloatVector)
-            .withDimension(1536)
+            .withDimension(384)
             .build();
 
     CreateCollectionParam req =
@@ -117,9 +128,9 @@ public class OpenAiClient {
       productIds.add(productId);
       reviews.add(review);
     }
-    //    List<List<Double>> reviewVectors = generateEmbeddings(reviews);
+    List<List<Float>> reviewVectors = generateEmbeddings(reviews);
 
-    List<List<Float>> reviewVectors = readFromFile("/Users/minukolunu/vectors.txt");
+    /*List<List<Float>> reviewVectors = readFromFile("/Users/minukolunu/vectors.txt");*/
 
     List<InsertParam.Field> fields = new ArrayList<>();
     fields.add(new InsertParam.Field("product_id", productIds));
@@ -179,10 +190,24 @@ public class OpenAiClient {
   public static void main(String[] args)
       throws FileNotFoundException, IOException, ClassNotFoundException {
     String databaseName = "products", collectionName = "product_reviews";
-    OpenAiClient client = new OpenAiClient();
-    /*client.createDataBase(databaseName);
-    client.createCollection(databaseName, collectionName);*/
-    //    client.vectorizeAndSave(databaseName, collectionName);
+    TestClient client = new TestClient();
+    client.dropAll(databaseName, collectionName);
+    client.createDataBase(databaseName);
+    client.createCollection(databaseName, collectionName);
+    client.vectorizeAndSave(databaseName, collectionName);
     client.createIndex(databaseName, collectionName, "product_review_vector");
+    System.out.println("Done");
+    /*System.out.println(generateEmbeddings(Arrays.asList("asdf", "asdf1")));*/
+  }
+
+  private void dropAll(String databaseName, String collectionName) {
+    System.out.println(
+        client.dropCollection(
+            DropCollectionParam.newBuilder()
+                .withCollectionName(collectionName)
+                .withDatabaseName(databaseName)
+                .build()));
+    System.out.println(
+        client.dropDatabase(DropDatabaseParam.newBuilder().withDatabaseName(databaseName).build()));
   }
 }

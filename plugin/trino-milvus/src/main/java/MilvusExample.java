@@ -12,6 +12,7 @@
  * limitations under the License.
  */
 
+import com.google.common.base.Stopwatch;
 import io.milvus.client.MilvusServiceClient;
 import io.milvus.grpc.*;
 import io.milvus.param.*;
@@ -42,7 +43,7 @@ public class MilvusExample {
         ConnectParam.newBuilder()
             .withHost("localhost")
             .withPort(19530)
-            .withAuthorization("root", "Milvus")
+            /*.withAuthorization("root", "Milvus")*/
             .build();
     milvusClient = new MilvusServiceClient(connectParam);
   }
@@ -503,7 +504,7 @@ public class MilvusExample {
 
   public static void main(String[] args) {
     MilvusExample example = new MilvusExample();
-
+    /*
     if (example.hasCollection()) {
       example.dropCollection();
     }
@@ -578,6 +579,21 @@ public class MilvusExample {
     example.releaseCollection();
     example.dropPartition(partitionName);
     example.dropIndex();
-    example.dropCollection();
+    example.dropCollection();*/
+    Stopwatch stopwatch = Stopwatch.createStarted();
+    System.out.println(
+        example.milvusClient.loadCollection(
+            LoadCollectionParam.newBuilder()
+                .withCollectionName("movie_reviews")
+                .withDatabaseName("reviews")
+                .build()));
+    System.out.println(stopwatch.elapsed(TimeUnit.MILLISECONDS));
+    /*example.milvusClient.search(
+        SearchParam.newBuilder()
+            .withCollectionName("movie_reviews")
+            .withVectorFieldName("movie_review_vec")
+            .withVectors(Arrays.asList(0.12f, 0.12f))
+            .build());
+    example.milvusClient.query(QueryParam.newBuilder().withCollectionName("movie_reviews").)*/
   }
 }

@@ -123,7 +123,7 @@ public class IcebergPageSource
             }
 
             Optional<RowPredicate> deleteFilterPredicate = deletePredicate.get();
-            if (deleteFilterPredicate.isPresent()) {
+             if (deleteFilterPredicate.isPresent()) {
                 dataPage = deleteFilterPredicate.get().filterPage(dataPage);
             }
 

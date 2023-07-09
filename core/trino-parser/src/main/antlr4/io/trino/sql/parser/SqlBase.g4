@@ -194,6 +194,7 @@ with
 tableElement
     : columnDefinition
     | likeClause
+    | similarToClause
     ;
 
 columnDefinition
@@ -203,6 +204,10 @@ columnDefinition
 likeClause
     : LIKE qualifiedName (optionType=(INCLUDING | EXCLUDING) PROPERTIES)?
     ;
+
+similarToClause
+   : SIMILAR_TO qualifiedName (optionType=(INCLUDING | EXCLUDING) PROPERTIES)?
+   ;
 
 properties
     : '(' propertyAssignments ')'
@@ -519,6 +524,7 @@ predicate[ParserRuleContext value]
     | NOT? IN '(' expression (',' expression)* ')'                        #inList
     | NOT? IN '(' query ')'                                               #inSubquery
     | NOT? LIKE pattern=valueExpression (ESCAPE escape=valueExpression)?  #like
+    | SIMILAR_TO pattern=valueExpression (ESCAPE escape=valueExpression)? #similar_to
     | IS NOT? NULL                                                        #nullPredicate
     | IS NOT? DISTINCT FROM right=valueExpression                         #distinctFrom
     ;
@@ -1040,6 +1046,7 @@ LEADING: 'LEADING';
 LEFT: 'LEFT';
 LEVEL: 'LEVEL';
 LIKE: 'LIKE';
+SIMILAR_TO: 'SIMILAR_TO';
 LIMIT: 'LIMIT';
 LISTAGG: 'LISTAGG';
 LOCAL: 'LOCAL';

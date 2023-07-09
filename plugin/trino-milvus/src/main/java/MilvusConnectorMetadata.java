@@ -130,6 +130,7 @@ public class MilvusConnectorMetadata implements ConnectorMetadata {
     return ConnectorMetadata.super.applyTopN(session, handle, topNCount, sortItems, assignments);
   }
 
+
   @Override
   public Optional<ConstraintApplicationResult<ConnectorTableHandle>> applyFilter(
       ConnectorSession session, ConnectorTableHandle handle, Constraint constraint) {

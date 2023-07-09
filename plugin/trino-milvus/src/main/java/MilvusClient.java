@@ -127,7 +127,7 @@ public class MilvusClient {
     }
       String SEARCH_PARAM = "{\"nprobe\":10}";
     List<List<Float>> searchVectors =
-        OpenAiClient.generateEmbeddings(Lists.newArrayList(similarTo));
+        TestClient.generateEmbeddings(Lists.newArrayList(similarTo));
     SearchParam searchParam =
         SearchParam.newBuilder()
             .withCollectionName(collectionName)

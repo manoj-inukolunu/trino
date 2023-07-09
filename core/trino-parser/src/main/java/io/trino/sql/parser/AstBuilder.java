@@ -2111,6 +2111,18 @@ class AstBuilder
         return new IsNotNullPredicate(getLocation(context), child);
     }
 
+
+    @Override
+    public Node visitSimilar_to(SqlBaseParser.Similar_toContext context) {
+        Expression result = new LikePredicate(
+                getLocation(context),
+                (Expression) visit(context.value),
+                (Expression) visit(context.pattern),
+                visitIfPresent(context.escape, Expression.class));
+
+        return result;
+    }
+
     @Override
     public Node visitLike(SqlBaseParser.LikeContext context)
     {
@@ -2940,6 +2952,16 @@ class AstBuilder
                 nullable,
                 properties,
                 comment);
+    }
+
+
+    @Override
+    public Node visitSimilarToClause(SqlBaseParser.SimilarToClauseContext context) {
+        return new LikeClause(
+                getLocation(context),
+                getQualifiedName(context.qualifiedName()),
+                Optional.ofNullable(context.optionType)
+                        .map(AstBuilder::getPropertiesOption));
     }
 
     @Override

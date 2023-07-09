@@ -63,6 +63,7 @@ Keyword                        SQL:2016      SQL-92
 ``JSON_VALUE``                 reserved
 ``LEFT``                       reserved      reserved
 ``LIKE``                       reserved      reserved
+``SIMILAR_TO``                 reserved      reserved
 ``LISTAGG``                    reserved
 ``LOCALTIME``                  reserved
 ``LOCALTIMESTAMP``             reserved
