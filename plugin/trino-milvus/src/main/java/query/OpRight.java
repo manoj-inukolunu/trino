@@ -11,22 +11,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
-import io.trino.spi.Plugin;
-import io.trino.spi.connector.ConnectorFactory;
+package query;
 
-import java.util.Set;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
-public class MilvusPlugin implements Plugin {
+import java.util.ArrayList;
+import java.util.List;
 
-  @Override
-  public Set<Class<?>> getFunctions() {
-    return ImmutableSet.<Class<?>>builder().add(SimilarityFunctions.class).build();
-  }
-
-  @Override
-  public Iterable<ConnectorFactory> getConnectorFactories() {
-    return ImmutableList.of(new MilvusConnectorFactory());
-  }
-}
+public record OpRight(
+    @JsonProperty("dim") Integer dim, @JsonProperty("vectors") List<Float> vectors) {}

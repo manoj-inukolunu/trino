@@ -58,6 +58,10 @@ import static io.trino.spi.StandardErrorCode.NOT_FOUND;
 import static io.trino.util.Failures.checkCondition;
 import static java.util.Objects.requireNonNull;
 
+
+/**
+ * Every query has a session associated with it?
+ */
 public final class Session
 {
     private final QueryId queryId;

@@ -15,6 +15,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.inject.Inject;
 import io.trino.spi.connector.*;
+import io.trino.spi.function.table.ConnectorTableFunctionHandle;
 import io.trino.spi.predicate.TupleDomain;
 
 import java.util.*;
@@ -38,6 +39,12 @@ public class MilvusConnectorMetadata implements ConnectorMetadata {
   @Override
   public List<String> listSchemaNames(ConnectorSession session) {
     return ImmutableList.copyOf(milvusClient.getSchemaNames());
+  }
+
+  @Override
+  public Optional<TableFunctionApplicationResult<ConnectorTableHandle>> applyTableFunction(
+      ConnectorSession session, ConnectorTableFunctionHandle handle) {
+    return ConnectorMetadata.super.applyTableFunction(session, handle);
   }
 
   @Override
@@ -130,7 +137,6 @@ public class MilvusConnectorMetadata implements ConnectorMetadata {
     return ConnectorMetadata.super.applyTopN(session, handle, topNCount, sortItems, assignments);
   }
 
-
   @Override
   public Optional<ConstraintApplicationResult<ConnectorTableHandle>> applyFilter(
       ConnectorSession session, ConnectorTableHandle handle, Constraint constraint) {
@@ -151,10 +157,8 @@ public class MilvusConnectorMetadata implements ConnectorMetadata {
     handle =
         new MilvusTableHandle(tableHandle.getSchemaName(), tableHandle.getTableName(), newDomain);
 
-    //setting remainingFilter to TupleDomain.all() because milvus is doing the actual filtering.
+    // setting remainingFilter to TupleDomain.all() because milvus is doing the actual filtering.
 
-    return Optional.of(
-        new ConstraintApplicationResult<>(
-            handle, TupleDomain.all(), false));
+    return Optional.of(new ConstraintApplicationResult<>(handle, TupleDomain.all(), false));
   }
 }

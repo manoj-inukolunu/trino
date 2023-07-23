@@ -116,7 +116,8 @@ public class SqlParser
         return invokeParser(name, sql, Optional.empty(), parseFunction, parsingOptions);
     }
 
-    private Node invokeParser(String name, String sql, Optional<NodeLocation> location, Function<SqlBaseParser, ParserRuleContext> parseFunction, ParsingOptions parsingOptions)
+    private Node invokeParser(String name, String sql, Optional<NodeLocation> location,
+                              Function<SqlBaseParser, ParserRuleContext> parseFunction, ParsingOptions parsingOptions)
     {
         try {
             SqlBaseLexer lexer = new SqlBaseLexer(new CaseInsensitiveStream(CharStreams.fromString(sql)));

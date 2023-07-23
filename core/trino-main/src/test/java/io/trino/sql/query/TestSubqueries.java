@@ -77,6 +77,23 @@ public class TestSubqueries
         assertions = new QueryAssertions(runner);
     }
 
+
+    @Test
+    public void test(){
+        Session session = testSessionBuilder()
+                .setCatalog(TEST_CATALOG_NAME)
+                .setSchema(TINY_SCHEMA_NAME)
+                .build();
+
+        LocalQueryRunner runner = LocalQueryRunner.builder(session)
+                .build();
+
+        runner.createCatalog(TEST_CATALOG_NAME, new TpchConnectorFactory(1), ImmutableMap.of());
+        runner.execute("create table testcatalog.tiny.test (pk int)");
+
+        runner.execute("select * from testcatalog.tiny.test ");;
+    }
+
     @AfterAll
     public void teardown()
     {

@@ -158,7 +158,7 @@ public class QueuedStatementResource
         queryManager.destroy();
     }
 
-    @ResourceSecurity(AUTHENTICATED_USER)
+    @ResourceSecurity(PUBLIC)
     @POST
     @Produces(APPLICATION_JSON)
     public Response postStatement(
@@ -172,8 +172,9 @@ public class QueuedStatementResource
         }
 
         Query query = registerQuery(statement, servletRequest, httpHeaders);
-
-        return createQueryResultsResponse(query.getQueryResults(query.getLastToken(), uriInfo));
+        QueryResults results = query.getQueryResults(query.getLastToken(), uriInfo);
+        System.out.println(results);
+        return createQueryResultsResponse(results);
     }
 
     private Query registerQuery(String statement, HttpServletRequest servletRequest, HttpHeaders httpHeaders)
@@ -236,8 +237,7 @@ public class QueuedStatementResource
             @PathParam("slug") String slug,
             @PathParam("token") long token)
     {
-        getQuery(queryId, slug, token)
-                .cancel();
+        getQuery(queryId, slug, token).cancel();
         return Response.noContent().build();
     }
 
@@ -252,6 +252,7 @@ public class QueuedStatementResource
 
     private Response createQueryResultsResponse(QueryResults results)
     {
+        System.out.println("RESULTS "+ results);
         Response.ResponseBuilder builder = Response.ok(results);
         if (!compressionEnabled) {
             builder.encoding("identity");

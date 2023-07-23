@@ -64,6 +64,10 @@ public class MilvusClient {
     this.config = config;
   }
 
+  public MilvusServiceClient getMilvusServiceClient(){
+      return this.milvusServiceClient;
+  }
+
   public Set<String> getSchemaNames() {
     return new HashSet<>(milvusServiceClient.listDatabases().getData().getDbNamesList());
   }
@@ -123,11 +127,10 @@ public class MilvusClient {
                   .withDatabaseName(databaseName)
                   .withPort(Integer.parseInt(config.getPort()))
                   .build());
-        dbToMilvusClient.put(databaseName, serviceClient);
+      dbToMilvusClient.put(databaseName, serviceClient);
     }
-      String SEARCH_PARAM = "{\"nprobe\":10}";
-    List<List<Float>> searchVectors =
-        TestClient.generateEmbeddings(Lists.newArrayList(similarTo));
+    String SEARCH_PARAM = "{\"nprobe\":10}";
+    List<List<Float>> searchVectors = TestClient.generateEmbeddings(Lists.newArrayList(similarTo));
     SearchParam searchParam =
         SearchParam.newBuilder()
             .withCollectionName(collectionName)
