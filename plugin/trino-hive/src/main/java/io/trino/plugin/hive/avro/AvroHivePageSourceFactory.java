@@ -39,7 +39,6 @@ import io.trino.spi.predicate.TupleDomain;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
 import org.apache.avro.util.internal.Accessor;
-import org.apache.hadoop.conf.Configuration;
 
 import java.io.IOException;
 import java.util.AbstractCollection;
@@ -85,7 +84,6 @@ public class AvroHivePageSourceFactory
 
     @Override
     public Optional<ReaderPageSource> createPageSource(
-            Configuration configuration,
             ConnectorSession session,
             Location path,
             long start,
@@ -118,6 +116,7 @@ public class AvroHivePageSourceFactory
 
         TrinoFileSystem trinoFileSystem = trinoFileSystemFactory.create(session.getIdentity());
         TrinoInputFile inputFile = new MonitoredInputFile(stats, trinoFileSystem.newInputFile(path));
+        HiveTimestampPrecision hiveTimestampPrecision = getTimestampPrecision(session);
 
         Schema tableSchema;
         try {
@@ -156,7 +155,6 @@ public class AvroHivePageSourceFactory
             throw new TrinoException(HIVE_CANNOT_OPEN_SPLIT, "Avro type resolution error when initializing split from %s".formatted(path), e);
         }
 
-        HiveTimestampPrecision hiveTimestampPrecision = getTimestampPrecision(session);
         if (maskedSchema.getFields().isEmpty()) {
             // no non-masked columns to select from partition schema
             // hack to return null rows with same total count as underlying data file

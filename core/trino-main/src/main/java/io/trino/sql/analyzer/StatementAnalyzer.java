@@ -129,6 +129,7 @@ import io.trino.sql.tree.Analyze;
 import io.trino.sql.tree.AstVisitor;
 import io.trino.sql.tree.Call;
 import io.trino.sql.tree.CallArgument;
+import io.trino.sql.tree.ColumnDefinition;
 import io.trino.sql.tree.Comment;
 import io.trino.sql.tree.Commit;
 import io.trino.sql.tree.CreateCatalog;
@@ -379,6 +380,8 @@ import static io.trino.sql.tree.Join.Type.FULL;
 import static io.trino.sql.tree.Join.Type.INNER;
 import static io.trino.sql.tree.Join.Type.LEFT;
 import static io.trino.sql.tree.Join.Type.RIGHT;
+import static io.trino.sql.tree.SaveMode.IGNORE;
+import static io.trino.sql.tree.SaveMode.REPLACE;
 import static io.trino.sql.util.AstUtils.preOrder;
 import static io.trino.type.UnknownType.UNKNOWN;
 import static io.trino.util.MoreLists.mappedCopy;
@@ -870,12 +873,17 @@ class StatementAnalyzer
         @Override
         protected Scope visitCreateTableAsSelect(CreateTableAsSelect node, Optional<Scope> scope)
         {
+            // TODO: Remove when engine is supporting table replacement
+            if (node.getSaveMode() == REPLACE) {
+                throw semanticException(NOT_SUPPORTED, node, "Replace table is not supported");
+            }
+
             // turn this into a query that has a new table writer node on top.
             QualifiedObjectName targetTable = createQualifiedObjectName(session, node, node.getName());
 
             Optional<TableHandle> targetTableHandle = metadata.getTableHandle(session, targetTable);
             if (targetTableHandle.isPresent()) {
-                if (node.isNotExists()) {
+                if (node.getSaveMode() == IGNORE) {
                     analysis.setCreate(new Analysis.Create(
                             Optional.of(targetTable),
                             Optional.empty(),
@@ -1023,6 +1031,18 @@ class StatementAnalyzer
         @Override
         protected Scope visitAddColumn(AddColumn node, Optional<Scope> scope)
         {
+            ColumnDefinition element = node.getColumn();
+            if (element.getName().getParts().size() > 1) {
+                if (!element.isNullable()) {
+                    throw semanticException(NOT_SUPPORTED, node, "Adding fields with NOT NULL constraint is unsupported");
+                }
+                if (!element.getProperties().isEmpty()) {
+                    throw semanticException(NOT_SUPPORTED, node, "Adding fields with column properties is unsupported");
+                }
+                if (element.getComment().isPresent()) {
+                    throw semanticException(NOT_SUPPORTED, node, "Adding fields with COMMENT is unsupported");
+                }
+            }
             return createAndAssignScope(node, scope);
         }
 
@@ -1078,6 +1098,11 @@ class StatementAnalyzer
         @Override
         protected Scope visitCreateTable(CreateTable node, Optional<Scope> scope)
         {
+            // TODO: Remove when engine is supporting table replacement
+            if (node.getSaveMode() == REPLACE) {
+                throw semanticException(NOT_SUPPORTED, node, "Replace table is not supported");
+            }
+
             validateProperties(node.getProperties(), scope);
             return createAndAssignScope(node, scope);
         }
@@ -2225,7 +2250,6 @@ class StatementAnalyzer
                     .withRelationType(RelationId.anonymous(), new RelationType(outputFields))
                     .build();
             analyzeFiltersAndMasks(table, targetTableName, new RelationType(outputFields), accessControlScope);
-            analyzeCheckConstraints(table, targetTableName, accessControlScope, tableSchema.getTableSchema().getCheckConstraints());
             analysis.registerTable(table, tableHandle, targetTableName, session.getIdentity().getUser(), accessControlScope);
 
             Scope tableScope = createAndAssignScope(table, scope, outputFields);
@@ -3252,10 +3276,6 @@ class StatementAnalyzer
             if (!accessControl.getRowFilters(session.toSecurityContext(), tableName).isEmpty()) {
                 throw semanticException(NOT_SUPPORTED, update, "Updating a table with a row filter is not supported");
             }
-            if (!tableSchema.getTableSchema().getCheckConstraints().isEmpty()) {
-                // TODO https://github.com/trinodb/trino/issues/15411 Add support for CHECK constraint to UPDATE statement
-                throw semanticException(NOT_SUPPORTED, update, "Updating a table with a check constraint is not supported");
-            }
 
             // TODO: how to deal with connectors that need to see the pre-image of rows to perform the update without
             //       flowing that data through the masking logic
@@ -3282,6 +3302,8 @@ class StatementAnalyzer
 
             Scope tableScope = analyzer.analyzeForUpdate(table, scope, UpdateKind.UPDATE);
             update.getWhere().ifPresent(where -> analyzeWhere(update, tableScope, where));
+            analyzeCheckConstraints(table, tableName, tableScope, tableSchema.getTableSchema().getCheckConstraints());
+            analysis.registerTable(table, redirection.getTableHandle(), tableName, session.getIdentity().getUser(), tableScope);
 
             ImmutableList.Builder<ExpressionAnalysis> analysesBuilder = ImmutableList.builder();
             ImmutableList.Builder<Type> expressionTypesBuilder = ImmutableList.builder();
@@ -3979,7 +4001,7 @@ class StatementAnalyzer
             if (node.getHaving().isPresent()) {
                 Expression predicate = node.getHaving().get();
 
-                List<Expression> windowExpressions = extractWindowExpressions(ImmutableList.of(predicate));
+                List<Expression> windowExpressions = extractWindowExpressions(ImmutableList.of(predicate), session, metadata);
                 if (!windowExpressions.isEmpty()) {
                     throw semanticException(NESTED_WINDOW, windowExpressions.get(0), "HAVING clause cannot contain window functions or row pattern measures");
                 }

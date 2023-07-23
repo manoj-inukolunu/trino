@@ -300,11 +300,12 @@ import static io.trino.SystemSessionProperties.getAggregationOperatorUnspillMemo
 import static io.trino.SystemSessionProperties.getFilterAndProjectMinOutputPageRowCount;
 import static io.trino.SystemSessionProperties.getFilterAndProjectMinOutputPageSize;
 import static io.trino.SystemSessionProperties.getPagePartitioningBufferPoolSize;
+import static io.trino.SystemSessionProperties.getSkewedPartitionMinDataProcessedRebalanceThreshold;
 import static io.trino.SystemSessionProperties.getTaskConcurrency;
 import static io.trino.SystemSessionProperties.getTaskPartitionedWriterCount;
 import static io.trino.SystemSessionProperties.getTaskScaleWritersMaxWriterCount;
 import static io.trino.SystemSessionProperties.getTaskWriterCount;
-import static io.trino.SystemSessionProperties.getWriterMinSize;
+import static io.trino.SystemSessionProperties.getWriterScalingMinDataProcessed;
 import static io.trino.SystemSessionProperties.isAdaptivePartialAggregationEnabled;
 import static io.trino.SystemSessionProperties.isEnableCoordinatorDynamicFiltersDistribution;
 import static io.trino.SystemSessionProperties.isEnableLargeDynamicFilters;
@@ -579,7 +580,8 @@ public class LocalExecutionPlanner
                     partitionFunction.getPartitionCount(),
                     taskCount,
                     getTaskPartitionedWriterCount(taskContext.getSession()),
-                    getWriterMinSize(taskContext.getSession()).toBytes()));
+                    getWriterScalingMinDataProcessed(taskContext.getSession()).toBytes(),
+                    getSkewedPartitionMinDataProcessedRebalanceThreshold(taskContext.getSession()).toBytes()));
         }
         else {
             partitionFunction = nodePartitioningManager.getPartitionFunction(taskContext.getSession(), partitioningScheme, partitionChannelTypes);
@@ -634,7 +636,6 @@ public class LocalExecutionPlanner
                 .collect(toImmutableList());
 
         context.addDriverFactory(
-                context.isInputDriver(),
                 true,
                 new PhysicalOperation(
                         outputOperatorFactory.createOutputOperator(
@@ -644,7 +645,7 @@ public class LocalExecutionPlanner
                                 pagePreprocessor,
                                 new PagesSerdeFactory(plannerContext.getBlockEncodingSerde(), isExchangeCompressionEnabled(session))),
                         physicalOperation),
-                context.getDriverInstanceCount());
+                context);
 
         // notify operator factories that planning has completed
         context.getDriverFactories().stream()
@@ -695,8 +696,10 @@ public class LocalExecutionPlanner
             this.nextPipelineId = nextPipelineId;
         }
 
-        public void addDriverFactory(boolean inputDriver, boolean outputDriver, PhysicalOperation physicalOperation, OptionalInt driverInstances)
+        public void addDriverFactory(boolean outputDriver, PhysicalOperation physicalOperation, LocalExecutionPlanContext context)
         {
+            boolean inputDriver = context.isInputDriver();
+            OptionalInt driverInstances = context.getDriverInstanceCount();
             List<OperatorFactoryWithTypes> operatorFactoriesWithTypes = physicalOperation.getOperatorFactoriesWithTypes();
             addLookupOuterDrivers(outputDriver, toOperatorFactories(operatorFactoriesWithTypes));
             List<OperatorFactory> operatorFactories;
@@ -2661,10 +2664,9 @@ public class LocalExecutionPlanner
             }
 
             context.addDriverFactory(
-                    buildContext.isInputDriver(),
                     false,
                     new PhysicalOperation(nestedLoopBuildOperatorFactory, buildSource),
-                    buildContext.getDriverInstanceCount());
+                    buildContext);
 
             // build output mapping
             ImmutableMap.Builder<Symbol, Integer> outputMappings = ImmutableMap.builder();
@@ -2792,10 +2794,9 @@ public class LocalExecutionPlanner
                     pagesIndexFactory);
 
             context.addDriverFactory(
-                    buildContext.isInputDriver(),
                     false,
                     new PhysicalOperation(builderOperatorFactory, buildSource),
-                    buildContext.getDriverInstanceCount());
+                    buildContext);
 
             return builderOperatorFactory.getPagesSpatialIndexFactory();
         }
@@ -2940,10 +2941,9 @@ public class LocalExecutionPlanner
                                 taskConcurrency / partitionCount));
 
                 context.addDriverFactory(
-                        buildContext.isInputDriver(),
                         false,
                         new PhysicalOperation(hashBuilderOperatorFactory, buildSource),
-                        buildContext.getDriverInstanceCount());
+                        buildContext);
 
                 JoinOperatorType joinType = JoinOperatorType.ofJoinNodeType(node.getType(), outputSingleMatch, waitForBuild);
                 operator = operatorFactories.spillingJoin(
@@ -2993,10 +2993,9 @@ public class LocalExecutionPlanner
                                 taskConcurrency / partitionCount));
 
                 context.addDriverFactory(
-                        buildContext.isInputDriver(),
                         false,
                         new PhysicalOperation(hashBuilderOperatorFactory, buildSource),
-                        buildContext.getDriverInstanceCount());
+                        buildContext);
 
                 JoinOperatorType joinType = JoinOperatorType.ofJoinNodeType(node.getType(), outputSingleMatch, waitForBuild);
                 operator = operatorFactories.join(
@@ -3239,10 +3238,9 @@ public class LocalExecutionPlanner
                     blockTypeOperators);
             SetSupplier setProvider = setBuilderOperatorFactory.getSetProvider();
             context.addDriverFactory(
-                    buildContext.isInputDriver(),
                     false,
                     new PhysicalOperation(setBuilderOperatorFactory, buildSource),
-                    buildContext.getDriverInstanceCount());
+                    buildContext);
 
             // Source channels are always laid out first, followed by the boolean output symbol
             Map<Symbol, Integer> outputMappings = ImmutableMap.<Symbol, Integer>builder()
@@ -3628,12 +3626,11 @@ public class LocalExecutionPlanner
                     Optional.empty(),
                     maxLocalExchangeBufferSize,
                     blockTypeOperators,
-                    getWriterMinSize(session));
+                    getWriterScalingMinDataProcessed(session));
 
             List<Symbol> expectedLayout = node.getInputs().get(0);
             Function<Page, Page> pagePreprocessor = enforceLoadedLayoutProcessor(expectedLayout, source.getLayout());
             context.addDriverFactory(
-                    subContext.isInputDriver(),
                     false,
                     new PhysicalOperation(
                             new LocalExchangeSinkOperatorFactory(
@@ -3642,7 +3639,7 @@ public class LocalExecutionPlanner
                                     node.getId(),
                                     pagePreprocessor),
                             source),
-                    subContext.getDriverInstanceCount());
+                    subContext);
             // the main driver is not an input... the exchange sources are the input for the plan
             context.setInputDriver(false);
 
@@ -3705,7 +3702,7 @@ public class LocalExecutionPlanner
                     hashChannel,
                     maxLocalExchangeBufferSize,
                     blockTypeOperators,
-                    getWriterMinSize(session));
+                    getWriterScalingMinDataProcessed(session));
             for (int i = 0; i < node.getSources().size(); i++) {
                 DriverFactoryParameters driverFactoryParameters = driverFactoryParametersList.get(i);
                 PhysicalOperation source = driverFactoryParameters.getSource();
@@ -3715,7 +3712,6 @@ public class LocalExecutionPlanner
                 Function<Page, Page> pagePreprocessor = enforceLoadedLayoutProcessor(expectedLayout, source.getLayout());
 
                 context.addDriverFactory(
-                        subContext.isInputDriver(),
                         false,
                         new PhysicalOperation(
                                 new LocalExchangeSinkOperatorFactory(
@@ -3724,7 +3720,7 @@ public class LocalExecutionPlanner
                                         node.getId(),
                                         pagePreprocessor),
                                 source),
-                        subContext.getDriverInstanceCount());
+                        subContext);
             }
 
             // the main driver is not an input... the exchange sources are the input for the plan

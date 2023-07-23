@@ -36,8 +36,7 @@ import io.trino.spi.statistics.ComputedStatistics;
 import io.trino.spi.statistics.TableStatistics;
 import io.trino.spi.statistics.TableStatisticsMetadata;
 import io.trino.spi.type.Type;
-
-import javax.annotation.Nullable;
+import jakarta.annotation.Nullable;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -225,18 +224,6 @@ public interface ConnectorMetadata
      */
     default SchemaTableName getTableName(ConnectorSession session, ConnectorTableHandle table)
     {
-        return getSchemaTableName(session, table);
-    }
-
-    /**
-     * Return schema table name for the specified table handle.
-     * This method is useful when requiring only {@link SchemaTableName} without other objects.
-     *
-     * @throws RuntimeException if table handle is no longer valid
-     */
-    @Deprecated // replaced with getTableName
-    default SchemaTableName getSchemaTableName(ConnectorSession session, ConnectorTableHandle table)
-    {
         return getTableSchema(session, table).getTable();
     }
 
@@ -299,7 +286,7 @@ public interface ConnectorMetadata
     }
 
     /**
-     * Gets the metadata for all columns that match the specified table prefix.
+     * Gets the metadata for all columns that match the specified table prefix. Columns of views and materialized views are not included.
      *
      * @deprecated use {@link #streamTableColumns} which handles redirected tables
      */
@@ -311,7 +298,7 @@ public interface ConnectorMetadata
 
     /**
      * Gets the metadata for all columns that match the specified table prefix. Redirected table names are included, but
-     * the column metadata for them is not.
+     * the column metadata for them is not. Views and materialized views are not included.
      */
     default Iterator<TableColumnsMetadata> streamTableColumns(ConnectorSession session, SchemaTablePrefix prefix)
     {
@@ -339,8 +326,23 @@ public interface ConnectorMetadata
     /**
      * Drops the specified schema.
      *
-     * @throws TrinoException with {@code SCHEMA_NOT_EMPTY} if the schema is not empty
+     * @throws TrinoException with {@code SCHEMA_NOT_EMPTY} if {@code cascade} is false and the schema is not empty
      */
+    default void dropSchema(ConnectorSession session, String schemaName, boolean cascade)
+    {
+        if (!cascade) {
+            dropSchema(session, schemaName);
+            return;
+        }
+        throw new TrinoException(NOT_SUPPORTED, "This connector does not support dropping schemas with CASCADE option");
+    }
+
+    /**
+     * Drops the specified schema.
+     *
+     * @deprecated use {@link #dropSchema(ConnectorSession, String, boolean)}
+     */
+    @Deprecated
     default void dropSchema(ConnectorSession session, String schemaName)
     {
         throw new TrinoException(NOT_SUPPORTED, "This connector does not support dropping schemas");
@@ -446,6 +448,17 @@ public interface ConnectorMetadata
     default void addColumn(ConnectorSession session, ConnectorTableHandle tableHandle, ColumnMetadata column)
     {
         throw new TrinoException(NOT_SUPPORTED, "This connector does not support adding columns");
+    }
+
+    /**
+     * Add the specified field, potentially nested, to a row.
+     *
+     * @param parentPath path to a field within the column, without leaf field name.
+     */
+    @Experimental(eta = "2023-06-01") // TODO add support for rows inside arrays and maps and for anonymous row fields
+    default void addField(ConnectorSession session, ConnectorTableHandle tableHandle, List<String> parentPath, String fieldName, Type type, boolean ignoreExisting)
+    {
+        throw new TrinoException(NOT_SUPPORTED, "This connector does not support adding fields");
     }
 
     /**
@@ -782,32 +795,10 @@ public interface ConnectorMetadata
 
     /**
      * Gets the schema properties for the specified schema.
-     *
-     * @deprecated use {@link #getSchemaProperties(ConnectorSession, String)}
-     */
-    @Deprecated(forRemoval = true)
-    default Map<String, Object> getSchemaProperties(ConnectorSession session, CatalogSchemaName schemaName)
-    {
-        return Map.of();
-    }
-
-    /**
-     * Gets the schema properties for the specified schema.
      */
     default Map<String, Object> getSchemaProperties(ConnectorSession session, String schemaName)
     {
-        return getSchemaProperties(session, new CatalogSchemaName("invalid", schemaName));
-    }
-
-    /**
-     * Get the schema properties for the specified schema.
-     *
-     * @deprecated use {@link #getSchemaOwner(ConnectorSession, String)}
-     */
-    @Deprecated(forRemoval = true)
-    default Optional<TrinoPrincipal> getSchemaOwner(ConnectorSession session, CatalogSchemaName schemaName)
-    {
-        return Optional.empty();
+        return Map.of();
     }
 
     /**
@@ -815,7 +806,7 @@ public interface ConnectorMetadata
      */
     default Optional<TrinoPrincipal> getSchemaOwner(ConnectorSession session, String schemaName)
     {
-        return getSchemaOwner(session, new CatalogSchemaName("invalid", schemaName));
+        return Optional.empty();
     }
 
     /**
@@ -1471,11 +1462,15 @@ public interface ConnectorMetadata
         return Optional.empty();
     }
 
+    // TODO - Remove this method since now it is only used in test BaseConnectorTest#testWrittenDataSize()
+    @Deprecated
     default boolean supportsReportingWrittenBytes(ConnectorSession session, SchemaTableName schemaTableName, Map<String, Object> tableProperties)
     {
         return false;
     }
 
+    // TODO - Remove this method since now it is only used in test BaseConnectorTest#testWrittenDataSize()
+    @Deprecated
     default boolean supportsReportingWrittenBytes(ConnectorSession session, ConnectorTableHandle connectorTableHandle)
     {
         return false;

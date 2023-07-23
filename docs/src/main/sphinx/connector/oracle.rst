@@ -203,7 +203,7 @@ Trino data type mapping:
     - ``TIMESTAMP(0)``
     - See :ref:`datetime mapping`
   * - ``TIMESTAMP(p)``
-    - ``TIMESTAMP``
+    - ``TIMESTAMP(p)``
     - See :ref:`datetime mapping`
   * - ``TIMESTAMP(p) WITH TIME ZONE``
     - ``TIMESTAMP WITH TIME ZONE``
@@ -300,8 +300,8 @@ For Oracle ``NUMBER`` (without precision and scale), you can change
 Mapping datetime types
 ^^^^^^^^^^^^^^^^^^^^^^
 
-Selecting a timestamp with fractional second precision (``p``) greater than 3
-truncates the fractional seconds to three digits instead of rounding it.
+Writing a timestamp with fractional second precision (``p``) greater than 9
+rounds the fractional seconds to nine digits.
 
 Oracle ``DATE`` type stores hours, minutes, and seconds, so it is mapped
 to Trino ``TIMESTAMP(0)``.
@@ -562,7 +562,7 @@ Oracle:
     --             Create Table
     ----------------------------------------
     -- CREATE TABLE oracle.trino_test.nation (
-    --    name varchar
+    --    name VARCHAR
     -- )
     -- (1 row)
 
@@ -580,7 +580,7 @@ since ``name`` is a column of type ``VARCHAR(25)``, which maps to
     --             Create Table
     ----------------------------------------
     -- CREATE TABLE oracle.trino_test.nation (
-    --    name varchar(25)
+    --    name VARCHAR(25)
     -- )
     -- (1 row)
 
