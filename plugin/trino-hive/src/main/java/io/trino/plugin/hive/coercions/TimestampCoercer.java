@@ -14,6 +14,7 @@
 package io.trino.plugin.hive.coercions;
 
 import io.airlift.slice.Slices;
+import io.trino.spi.TrinoException;
 import io.trino.spi.block.Block;
 import io.trino.spi.block.BlockBuilder;
 import io.trino.spi.type.LongTimestamp;
@@ -25,9 +26,11 @@ import java.time.chrono.IsoChronology;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
 
+import static io.trino.plugin.hive.HiveErrorCode.HIVE_INVALID_TIMESTAMP_COERCION;
 import static io.trino.spi.type.Timestamps.MICROSECONDS_PER_SECOND;
 import static io.trino.spi.type.Timestamps.NANOSECONDS_PER_MICROSECOND;
 import static io.trino.spi.type.Timestamps.PICOSECONDS_PER_NANOSECOND;
+import static io.trino.spi.type.Timestamps.SECONDS_PER_DAY;
 import static io.trino.spi.type.Varchars.truncateToLength;
 import static java.lang.Math.floorDiv;
 import static java.lang.Math.floorMod;
@@ -46,30 +49,10 @@ public final class TimestampCoercer
             .toFormatter()
             .withChronology(IsoChronology.INSTANCE);
 
+    // Before 1900, Java Time and Joda Time are not consistent with java.sql.Date and java.util.Calendar
+    private static final long START_OF_MODERN_ERA_SECONDS = java.time.LocalDate.of(1900, 1, 1).toEpochDay() * SECONDS_PER_DAY;
+
     private TimestampCoercer() {}
-
-    public static class ShortTimestampToVarcharCoercer
-            extends TypeCoercer<TimestampType, VarcharType>
-    {
-        public ShortTimestampToVarcharCoercer(TimestampType fromType, VarcharType toType)
-        {
-            super(fromType, toType);
-        }
-
-        @Override
-        protected void applyCoercedValue(BlockBuilder blockBuilder, Block block, int position)
-        {
-            long epochMicros = fromType.getLong(block, position);
-            long epochSecond = floorDiv(epochMicros, MICROSECONDS_PER_SECOND);
-            int nanoFraction = floorMod(epochMicros, MICROSECONDS_PER_SECOND) * NANOSECONDS_PER_MICROSECOND;
-            toType.writeSlice(
-                    blockBuilder,
-                    truncateToLength(
-                            Slices.utf8Slice(
-                                    LOCAL_DATE_TIME.format(LocalDateTime.ofEpochSecond(epochSecond, nanoFraction, UTC))),
-                            toType));
-        }
-    }
 
     public static class LongTimestampToVarcharCoercer
             extends TypeCoercer<TimestampType, VarcharType>
@@ -88,6 +71,9 @@ public final class TimestampCoercer
             long microsFraction = floorMod(timestamp.getEpochMicros(), MICROSECONDS_PER_SECOND);
             // Hive timestamp has nanoseconds precision, so no truncation here
             long nanosFraction = (microsFraction * NANOSECONDS_PER_MICROSECOND) + (timestamp.getPicosOfMicro() / PICOSECONDS_PER_NANOSECOND);
+            if (epochSecond < START_OF_MODERN_ERA_SECONDS) {
+                throw new TrinoException(HIVE_INVALID_TIMESTAMP_COERCION, "Coercion on historical dates is not supported");
+            }
 
             toType.writeSlice(
                     blockBuilder,
